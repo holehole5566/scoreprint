@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>ScorePrint - 成績單產生器</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: "Microsoft JhengHei", sans-serif; background: #f5f5f5; }
+
+/* ===== 操作介面（列印時隱藏）===== */
+.controls {
+  max-width: 900px; margin: 20px auto; padding: 20px;
+  background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.1);
+}
+.controls h1 { font-size: 22px; margin-bottom: 16px; }
+.controls label { font-weight: bold; display: block; margin-bottom: 4px; }
+.controls input[type="file"] { margin-bottom: 16px; }
+.controls button {
+  padding: 8px 20px; font-size: 14px; cursor: pointer;
+  background: #4a90d9; color: #fff; border: none; border-radius: 4px; margin-right: 8px;
+}
+.controls button:hover { background: #357abd; }
+#status { margin: 8px 0; color: #666; font-size: 13px; }
+
+#rank-editor { margin-top: 16px; }
+#rank-editor table { border-collapse: collapse; width: 100%; }
+#rank-editor th, #rank-editor td {
+  border: 1px solid #ccc; padding: 4px 8px; text-align: center; font-size: 13px;
+}
+#rank-editor th { background: #eee; }
+#rank-editor input[type="number"] {
+  width: 60px; text-align: center; border: 1px solid #ccc; border-radius: 3px; padding: 2px;
+}
+
+/* ===== 列印區域 ===== */
+#print-area { display: none; }
+
+/* ===== 共用卡片樣式 ===== */
+.card {
+  width: 100%;
+  border: 1px dashed #aaa;
+  padding: 2mm 3mm;
+}
+.card table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.card th, .card td {
+  border: 1px solid #333; padding: 1px 3px; text-align: center;
+  font-size: 8pt; line-height: 1.3;
+  white-space: nowrap;
+}
+.card th { background: #e8e8e8; font-weight: bold; }
+.card .sign-cell { height: 10mm; }
+.card .progress-pos { color: #d00; font-weight: bold; }
+.card .progress-neg { color: #080; font-weight: bold; }
+
+/* ===== 列印樣式 ===== */
+@media print {
+  .controls { display: none !important; }
+  #print-area { display: block !important; margin: 0; padding: 0; }
+  .page {
+    width: 210mm; height: 297mm;
+    padding: 6mm 8mm;
+    page-break-after: always;
+    display: flex; flex-direction: column; gap: 3mm;
+  }
+  .page:last-child { page-break-after: auto; }
+}
+
+/* ===== 螢幕預覽 ===== */
+@media screen {
+  #print-area.preview { display: block !important; max-width: 210mm; margin: 20px auto; }
+  .page {
+    width: 210mm; min-height: 297mm;
+    padding: 6mm 8mm; margin-bottom: 10px;
+    background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    display: flex; flex-direction: column; gap: 3mm;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <h1>📄 ScorePrint — 成績單產生器</h1>
+  <label>上傳成績 PDF（從校務系統列印儲存的 PDF）：</label>
+  <input type="file" id="file-input" accept=".pdf">
+  <div id="status"></div>
+  <div id="rank-editor"></div>
+  <div style="margin-top:16px">
+    <button id="btn-preview" style="display:none">預覽成績單</button>
+    <button id="btn-print" style="display:none" onclick="window.print()">列印</button>
+  </div>
+</div>
+
+<div id="print-area"></div>
+
+<script type="module">
+const { pdfjsLib } = globalThis;
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+
+let students = [];
+const CARDS_PER_PAGE = 12;
+
+document.getElementById('file-input').addEventListener('change', handleFile);
+document.getElementById('btn-preview').addEventListener('click', generatePreview);
+
+async function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('status');
+  status.textContent = '解析 PDF 中...';
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    let allItems = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      allItems = allItems.concat(content.items);
+    }
+
+    parsePdfText(allItems);
+    status.textContent = `解析完成，共 ${students.length} 位學生`;
+  } catch (err) {
+    status.textContent = '解析失敗：' + err.message;
+    console.error(err);
+  }
+}
+
+function parsePdfText(items) {
+  // Group text items by Y position (same row = similar Y)
+  const rows = [];
+  const Y_THRESHOLD = 3;
+
+  items.forEach(item => {
+    const y = Math.round(item.transform[5]);
+    const x = item.transform[4];
+    const text = item.str.trim();
+    if (!text) return;
+
+    let found = rows.find(r => Math.abs(r.y - y) < Y_THRESHOLD);
+    if (!found) {
+      found = { y, cells: [] };
+      rows.push(found);
+    }
+    found.cells.push({ x, text });
+  });
+
+  rows.sort((a, b) => b.y - a.y);
+  rows.forEach(r => r.cells.sort((a, b) => a.x - b.x));
+
+  // Define column boundaries based on X coordinates from debug output:
+  // seat: x~39, name: x~66-84, scores: x~133,172,212,252,292,331,386
+  // 總分: x~422-428, 總平均: x~474, 班名次: x~512-517, 年名次: x~544-550
+  const COL_BOUNDS = [
+    { name: 'seat',      min: 30,  max: 55  },
+    { name: 'name',      min: 55,  max: 110 },
+    { name: 'score0',    min: 110, max: 150 }, // 國文
+    { name: 'score1',    min: 150, max: 190 }, // 英語
+    { name: 'score2',    min: 190, max: 230 }, // 數學
+    { name: 'score3',    min: 230, max: 270 }, // 歷史
+    { name: 'score4',    min: 270, max: 310 }, // 地理
+    { name: 'score5',    min: 310, max: 355 }, // 公民
+    { name: 'score6',    min: 355, max: 405 }, // 自然
+    { name: 'total',     min: 405, max: 450 }, // 總分
+    { name: 'avg',       min: 450, max: 490 }, // 總平均
+    { name: 'classRank', min: 490, max: 525 }, // 班名次
+    { name: 'yearRank',  min: 525, max: 570 }, // 年名次
+  ];
+
+  function assignColumns(cells) {
+    const result = {};
+    COL_BOUNDS.forEach(col => result[col.name] = '');
+
+    cells.forEach(cell => {
+      for (const col of COL_BOUNDS) {
+        if (cell.x >= col.min && cell.x < col.max) {
+          result[col.name] += cell.text;
+          break;
+        }
+      }
+    });
+    return result;
+  }
+
+  students = [];
+  const seatPattern = /^\d{2}$/;
+
+  for (const row of rows) {
+    const cols = assignColumns(row.cells);
+    if (!seatPattern.test(cols.seat)) continue;
+
+    const scores = [];
+    for (let i = 0; i < 7; i++) {
+      const v = parseInt(cols['score' + i]);
+      scores.push(isNaN(v) ? 0 : v);
+    }
+
+    students.push({
+      seat: cols.seat,
+      name: cols.name,
+      scores,
+      avg: parseFloat(cols.avg) || 0,
+      classRank: parseInt(cols.classRank) || 0,
+      yearRank: parseInt(cols.yearRank) || 0,
+      prevRank: ''
+    });
+  }
+
+  if (students.length === 0) {
+    alert('沒有解析到學生資料');
+    return;
+  }
+
+  // Sort by seat number
+  students.sort((a, b) => parseInt(a.seat) - parseInt(b.seat));
+
+  renderRankEditor();
+  document.getElementById('btn-preview').style.display = 'inline-block';
+  document.getElementById('btn-print').style.display = 'inline-block';
+}
+
+function renderRankEditor() {
+  let html = '<h3>填入上次校排名次：</h3>';
+  html += '<table><tr><th>座號</th><th>姓名</th><th>本次校排</th><th>上次校排</th><th>進退步</th></tr>';
+  students.forEach((s, i) => {
+    html += `<tr>
+      <td>${s.seat}</td><td>${s.name}</td><td>${s.yearRank}</td>
+      <td><input type="number" id="prev-${i}" value="${s.prevRank}" min="1"
+           oninput="window.updateProgress(${i}, this.value)"></td>
+      <td id="prog-${i}">—</td>
+    </tr>`;
+  });
+  html += '</table>';
+  document.getElementById('rank-editor').innerHTML = html;
+}
+
+window.updateProgress = function(idx, val) {
+  students[idx].prevRank = val ? parseInt(val) : '';
+  const el = document.getElementById(`prog-${idx}`);
+  if (val && !isNaN(val)) {
+    const diff = parseInt(val) - students[idx].yearRank;
+    if (diff > 0) el.innerHTML = `<span style="color:#d00">↑${diff}</span>`;
+    else if (diff < 0) el.innerHTML = `<span style="color:#080">↓${Math.abs(diff)}</span>`;
+    else el.textContent = '→0';
+  } else {
+    el.textContent = '—';
+  }
+};
+
+function generatePreview() {
+  const subjectNames = ['國文','英語','數學','歷史','地理','公民','自然'];
+  const printArea = document.getElementById('print-area');
+  printArea.classList.add('preview');
+
+  let html = '';
+  for (let p = 0; p < students.length; p += CARDS_PER_PAGE) {
+    html += '<div class="page">';
+    const pageStudents = students.slice(p, p + CARDS_PER_PAGE);
+    pageStudents.forEach(s => {
+      let progressText = '';
+      if (s.prevRank && !isNaN(s.prevRank)) {
+        const diff = s.prevRank - s.yearRank;
+        if (diff > 0) progressText = `<span class="progress-pos">+${diff}</span>`;
+        else if (diff < 0) progressText = `<span class="progress-neg">${diff}</span>`;
+        else progressText = '+0';
+      }
+
+      html += `<div class="card">
+        <table>
+          <tr>
+            <th>姓名</th>
+            ${subjectNames.map(n => `<th>${n}</th>`).join('')}
+            <th>平均</th><th>班名次</th><th>校名次</th><th>上次名次</th><th>家長簽章</th>
+          </tr>
+          <tr>
+            <td>${s.name}</td>
+            ${s.scores.map(v => `<td>${v}</td>`).join('')}
+            <td>${s.avg}</td><td>${s.classRank}</td><td>${s.yearRank}</td>
+            <td>${s.prevRank ? s.prevRank + '(' + progressText + ')' : ''}</td>
+            <td class="sign-cell"></td>
+          </tr>
+        </table>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  printArea.innerHTML = html;
+  printArea.scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
