@@ -4,319 +4,453 @@
 <meta charset="UTF-8">
 <title>ScorePrint - 成績單產生器</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
 <style>
+.mi { font-family: "Material Symbols Rounded"; font-size: 20px; vertical-align: middle; font-weight: normal; font-style: normal; line-height: 1; }
+:root {
+  --pink: #E8A0BF; --pink-light: #F5D5E5; --pink-dark: #D4789E;
+  --blue: #A7C7E7; --blue-light: #D6E8F7; --blue-dark: #7BADD4;
+  --bg: #FBF7F8; --white: #FFFFFF; --text: #2D2D2D; --text-light: #6B6B6B;
+  --border: #E8E0E4; --success: #5CB85C; --error: #D94F6B;
+  --radius: 10px; --shadow: 0 2px 12px rgba(0,0,0,.06);
+}
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: "Microsoft JhengHei", sans-serif; background: #f5f5f5; }
+body { font-family: "Microsoft JhengHei", -apple-system, sans-serif; background: var(--bg); color: var(--text); }
 
-/* ===== 操作介面（列印時隱藏）===== */
+/* Brand header */
+.brand-header {
+  background: var(--pink);
+  padding: 18px 0; text-align: center; color: var(--white);
+  box-shadow: 0 2px 16px rgba(232,160,191,.25);
+}
+.brand-header h1 { font-size: 22px; font-weight: 700; letter-spacing: .5px; }
+.brand-header p { font-size: 12px; opacity: .85; margin-top: 2px; }
+
+/* Progress indicator */
+.progress-bar { max-width: 720px; margin: 24px auto 0; display: flex; align-items: center; justify-content: center; gap: 0; }
+.step { display: flex; align-items: center; gap: 0; }
+.step-dot {
+  width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; border: 2px solid var(--border); background: var(--white); color: var(--text-light);
+  transition: all .25s;
+}
+.step-dot.active { border-color: var(--pink); background: var(--pink); color: var(--white); }
+.step-dot.done { border-color: var(--success); background: var(--success); color: var(--white); }
+.step-label { font-size: 11px; color: var(--text-light); margin-left: 6px; margin-right: 6px; white-space: nowrap; }
+.step-label.active { color: var(--pink-dark); font-weight: 600; }
+.step-line { width: 40px; height: 2px; background: var(--border); }
+.step-line.done { background: var(--success); }
+
+/* Main container */
 .controls {
-  max-width: 900px; margin: 20px auto; padding: 20px;
-  background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.1);
-}
-.controls h1 { font-size: 22px; margin-bottom: 16px; }
-.controls label { font-weight: bold; display: block; margin-bottom: 4px; }
-.controls input[type="file"] { margin-bottom: 16px; }
-.controls button {
-  padding: 8px 20px; font-size: 14px; cursor: pointer;
-  background: #4a90d9; color: #fff; border: none; border-radius: 4px; margin-right: 8px;
-}
-.controls button:hover { background: #357abd; }
-#status { margin: 8px 0; color: #666; font-size: 13px; }
-
-#rank-editor { margin-top: 16px; }
-#rank-editor table { border-collapse: collapse; width: 100%; }
-#rank-editor th, #rank-editor td {
-  border: 1px solid #ccc; padding: 4px 8px; text-align: center; font-size: 13px;
-}
-#rank-editor th { background: #eee; }
-#rank-editor input[type="number"] {
-  width: 60px; text-align: center; border: 1px solid #ccc; border-radius: 3px; padding: 2px;
+  max-width: 780px; margin: 20px auto; padding: 0 16px 32px;
 }
 
-/* ===== 列印區域 ===== */
+/* Section cards */
+.section-card {
+  background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow);
+  border: 1px solid var(--border); padding: 24px; margin-bottom: 16px;
+}
+.section-card h2 {
+  font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-card h2 .badge {
+  font-size: 11px; background: var(--pink-light); color: var(--pink-dark);
+  padding: 2px 8px; border-radius: 10px; font-weight: 600;
+}
+
+/* Tabs */
+.tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+.tab-btn {
+  padding: 9px 22px; font-size: 13px; font-weight: 600; cursor: pointer;
+  border: 1.5px solid var(--border); border-radius: 8px;
+  background: var(--white); color: var(--text-light); transition: all .2s;
+}
+.tab-btn:hover { border-color: var(--pink-light); background: var(--pink-light); color: var(--pink-dark); }
+.tab-btn.active { border-color: var(--pink); background: var(--pink); color: var(--white); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Labels */
+.controls label { font-weight: 600; display: block; margin-bottom: 6px; font-size: 13px; color: var(--text); }
+
+/* File dropzone */
+.controls input[type="file"] { display: none; }
+.file-drop {
+  display: block; margin-bottom: 16px; padding: 18px 20px;
+  border: 2px dashed var(--border); border-radius: var(--radius); background: var(--bg);
+  text-align: center; cursor: pointer; font-size: 13px; color: var(--text-light);
+  transition: all .2s;
+}
+.file-drop:hover { border-color: var(--blue); background: var(--blue-light); }
+.file-drop.has-file { border-color: var(--success); background: #f0fff0; color: var(--text); }
+
+/* Buttons */
+.btn {
+  padding: 9px 22px; font-size: 13px; font-weight: 600; cursor: pointer;
+  border: none; border-radius: 8px; transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-primary { background: var(--pink); color: var(--white); }
+.btn-primary:hover { background: var(--pink-dark); }
+.btn-success { background: var(--success); color: var(--white); }
+.btn-success:hover { background: #449d44; }
+
+/* Status */
+.status-msg { margin: 8px 0; font-size: 12px; color: var(--text-light); }
+.status-msg.success { color: var(--success); }
+.status-msg.error { color: var(--error); }
+
+/* Tables */
+.table-wrap { margin-top: 12px; }
+.table-wrap table { border-collapse: collapse; width: 100%; }
+.table-wrap th, .table-wrap td { border: 1px solid var(--border); padding: 6px 8px; text-align: center; font-size: 12px; }
+.table-wrap th { background: var(--blue-light); color: var(--text); font-weight: 600; position: sticky; top: 0; z-index: 1; }
+.table-wrap tr:hover td { background: var(--pink-light); }
+.table-wrap input[type="number"] {
+  width: 56px; text-align: center; border: 1.5px solid var(--border); border-radius: 6px; padding: 4px;
+  font-size: 12px; transition: border-color .2s;
+}
+.table-wrap input[type="number"]:focus { outline: none; border-color: var(--pink); }
+
+/* Details */
+details { margin-bottom: 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+details summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text); }
+details table { border-collapse: collapse; font-size: 12px; margin: 8px 0; }
+details td { border: 1px solid var(--border); padding: 3px 10px; }
+details td:first-child { background: var(--blue-light); font-weight: 600; }
+
+/* Print area */
 #print-area { display: none; }
-
-/* ===== 共用卡片樣式 ===== */
-.card {
-  width: 100%;
-  border: 1px dashed #aaa;
-  padding: 2mm 3mm;
-}
+.card { width: 100%; border: 1px dashed #aaa; padding: 2mm 3mm; }
 .card table { width: 100%; border-collapse: collapse; table-layout: auto; }
-.card th, .card td {
-  border: 1px solid #333; padding: 3px 6px; text-align: center;
-  font-size: 11pt; line-height: 1.4;
-  white-space: nowrap;
-}
+.card th, .card td { border: 1px solid #333; padding: 3px 6px; text-align: center; font-size: 11pt; line-height: 1.4; white-space: nowrap; }
 .card th { background: #e8e8e8; font-weight: bold; }
 .card .sign-cell { height: 10mm; }
 .card .progress-pos { color: #d00; font-weight: bold; }
 .card .progress-neg { color: #080; font-weight: bold; }
 
-/* ===== 列印樣式 ===== */
 @media print {
-  .controls { display: none !important; }
+  .brand-header, .controls { display: none !important; }
   #print-area { display: block !important; margin: 0; padding: 0; }
-  .page {
-    width: 210mm; height: 297mm;
-    padding: 4mm 5mm;
-    page-break-after: always;
-    display: flex; flex-direction: column; gap: 3mm;
-  }
+  .page { width: 210mm; height: 297mm; padding: 4mm 5mm; page-break-after: always; display: flex; flex-direction: column; gap: 3mm; }
   .page:last-child { page-break-after: auto; }
 }
-
-/* ===== 螢幕預覽 ===== */
 @media screen {
   #print-area.preview { display: block !important; max-width: 210mm; margin: 20px auto; }
-  .page {
-    width: 210mm; min-height: 297mm;
-    padding: 4mm 5mm; margin-bottom: 10px;
-    background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.15);
-    display: flex; flex-direction: column; gap: 3mm;
-  }
+  .page { width: 210mm; min-height: 297mm; padding: 4mm 5mm; margin-bottom: 10px; background: #fff; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 3mm; }
 }
 </style>
 </head>
 <body>
 
-<div class="controls">
-  <h1>📄 ScorePrint — 成績單產生器</h1>
+<div class="brand-header">
+  <h1><span class="mi" style="font-size:26px">description</span> ScorePrint</h1>
+  <p>成績單產生器 — 快速製作可列印的學生成績小卡</p>
+</div>
 
-  <details style="margin-bottom:16px; background:#f9f9f9; border:1px solid #ddd; border-radius:6px; padding:12px;">
-    <summary style="cursor:pointer; font-weight:bold; font-size:14px;">📖 使用說明</summary>
-    <div style="margin-top:10px; font-size:13px; line-height:1.8;">
-      <p>⚠️ 本工具僅適用於<span style="color:#d00; font-weight:bold;">定期評量一、定期評量二</span>（定期三有其他科目，格式不同）</p>
-      <p style="font-weight:bold; margin-top:8px;">校務系統匯出設定（新北校務系統 → 列印成績）：</p>
-      <table style="border-collapse:collapse; font-size:12px; margin:6px 0;">
-        <tr><td style="border:1px solid #ccc; padding:2px 8px; background:#eee;">日常生活</td><td style="border:1px solid #ccc; padding:2px 8px;">不顯示</td></tr>
-        <tr><td style="border:1px solid #ccc; padding:2px 8px; background:#eee;">學號顯示</td><td style="border:1px solid #ccc; padding:2px 8px;">不顯示</td></tr>
-        <tr><td style="border:1px solid #ccc; padding:2px 8px; background:#eee;">班級名次</td><td style="border:1px solid #ccc; padding:2px 8px;">全部顯示</td></tr>
-        <tr><td style="border:1px solid #ccc; padding:2px 8px; background:#eee;">年級名次</td><td style="border:1px solid #ccc; padding:2px 8px;">全部顯示</td></tr>
-        <tr><td style="border:1px solid #ccc; padding:2px 8px; background:#eee;">總分顯示(定期)</td><td style="border:1px solid #ccc; padding:2px 8px;">定期總分</td></tr>
-        <tr><td style="border:1px solid #ccc; padding:2px 8px; background:#eee;">顯示內容(定期)</td><td style="border:1px solid #ccc; padding:2px 8px;">定期</td></tr>
-        <tr><td style="border:1px solid #ccc; padding:2px 8px; background:#eee;">計算備註(定期)</td><td style="border:1px solid #ccc; padding:2px 8px;">顯示加權</td></tr>
-        <tr><td style="border:1px solid #ccc; padding:2px 8px; background:#eee;">預覽型態</td><td style="border:1px solid #ccc; padding:2px 8px;">HTML</td></tr>
-      </table>
-      <p style="margin-top:8px;">步驟：</p>
-      <ol style="padding-left:20px;">
-        <li>在校務系統預覽成績後，用瀏覽器「列印 → 儲存為 PDF」</li>
-        <li>上傳該 PDF 到本頁</li>
-        <li>填入每位學生的「上次校排」</li>
-        <li>按「預覽成績單」確認排版</li>
-        <li>按「列印」印出 A4，自行裁切</li>
-      </ol>
-    </div>
-  </details>
-
-  <label>上傳成績 PDF（從校務系統列印儲存的 PDF）：</label>
-  <input type="file" id="file-input" accept=".pdf">
-  <div id="status"></div>
-  <div id="rank-editor"></div>
-  <div style="margin-top:16px">
-    <button id="btn-preview" style="display:none">預覽成績單</button>
-    <button id="btn-print" style="display:none" onclick="window.print()">列印</button>
+<div class="progress-bar" id="progress-bar">
+  <div class="step">
+    <div class="step-dot active" id="dot-1">1</div>
+    <span class="step-label active" id="lbl-1">上傳</span>
+  </div>
+  <div class="step-line" id="line-1"></div>
+  <div class="step">
+    <div class="step-dot" id="dot-2">2</div>
+    <span class="step-label" id="lbl-2">編輯</span>
+  </div>
+  <div class="step-line" id="line-2"></div>
+  <div class="step">
+    <div class="step-dot" id="dot-3">3</div>
+    <span class="step-label" id="lbl-3">預覽列印</span>
   </div>
 </div>
 
-<div id="print-area"></div>
+<div class="controls">
 
+  <!-- Tab selector -->
+  <div class="section-card" style="padding:16px 24px;">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('tab1')">定期一 / 定期二</button>
+      <button class="tab-btn" onclick="switchTab('tab3')">定期三</button>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 1 ==================== -->
+  <div id="tab1" class="tab-content active">
+
+    <!-- Step 1: Upload -->
+    <div class="section-card" id="sec-upload">
+      <h2><span class="mi">upload_file</span> 上傳成績 <span class="badge">步驟 1</span></h2>
+      <details>
+        <summary><span class="mi" style="font-size:16px">menu_book</span> 使用說明（定期一、二）</summary>
+        <div style="margin-top:10px; font-size:12px; line-height:1.8;">
+          <p><span class="mi" style="font-size:16px;color:var(--error)">warning</span> 本分頁適用於<span style="color:var(--error); font-weight:700;">定期評量一、定期評量二</span>（定期三請切換分頁）</p>
+          <p style="font-weight:600; margin-top:8px;">校務系統匯出設定：</p>
+          <table>
+            <tr><td>日常生活</td><td>不顯示</td></tr>
+            <tr><td>學號顯示</td><td>不顯示</td></tr>
+            <tr><td>班級名次</td><td>全部顯示</td></tr>
+            <tr><td>年級名次</td><td>全部顯示</td></tr>
+            <tr><td>總分顯示(定期)</td><td>定期總分</td></tr>
+            <tr><td>顯示內容(定期)</td><td>定期</td></tr>
+            <tr><td>計算備註(定期)</td><td>顯示加權</td></tr>
+            <tr><td>預覽型態</td><td>HTML</td></tr>
+          </table>
+        </div>
+      </details>
+      <label>上傳本次成績 PDF：</label>
+      <label class="file-drop" id="drop1" for="file-input"><span class="mi">cloud_upload</span> 點擊選擇或拖曳 PDF 到此處</label>
+      <input type="file" id="file-input" accept=".pdf">
+      <div id="status" class="status-msg"></div>
+      <label style="margin-top:8px">上傳上次成績 PDF（選填，自動帶入上次校排）：</label>
+      <label class="file-drop" id="drop2" for="prev-file-input"><span class="mi">cloud_upload</span> 點擊選擇或拖曳 PDF 到此處</label>
+      <input type="file" id="prev-file-input" accept=".pdf">
+      <div id="prev-status" class="status-msg"></div>
+    </div>
+
+    <!-- Step 2: Edit -->
+    <div class="section-card" id="sec-edit" style="display:none">
+      <h2><span class="mi">edit</span> 編輯名次 <span class="badge">步驟 2</span></h2>
+      <div id="rank-editor" class="table-wrap"></div>
+    </div>
+
+    <!-- Step 3: Preview/Print -->
+    <div class="section-card" id="sec-action" style="display:none">
+      <h2><span class="mi">print</span> 預覽與列印 <span class="badge">步驟 3</span></h2>
+      <p style="font-size:12px; color:var(--text-light); margin-bottom:12px;">確認資料無誤後，按預覽查看排版，再列印。</p>
+      <button class="btn btn-primary" id="btn-preview"><span class="mi" style="font-size:18px">visibility</span> 預覽成績單</button>
+      <button class="btn btn-success" id="btn-print" onclick="window.print()"><span class="mi" style="font-size:18px">print</span> 列印</button>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 3 ==================== -->
+  <div id="tab3" class="tab-content">
+
+    <div class="section-card">
+      <h2><span class="mi">upload_file</span> 上傳名單 <span class="badge">步驟 1</span></h2>
+      <details>
+        <summary><span class="mi" style="font-size:16px">menu_book</span> 定期三使用說明</summary>
+        <div style="margin-top:10px; font-size:12px; line-height:1.8;">
+          <p>定期三科目較多，PDF 格式不同，因此<span style="color:var(--error); font-weight:700;">只從 PDF 讀取座號和姓名</span>，其餘請手動輸入。</p>
+          <ol style="padding-left:20px; margin-top:8px;">
+            <li>上傳定期三成績 PDF（僅讀取學生名單）</li>
+            <li>手動填入各科成績、平均、名次</li>
+            <li>預覽 → 列印</li>
+          </ol>
+        </div>
+      </details>
+      <label>上傳定期三成績 PDF（僅讀取座號、姓名）：</label>
+      <label class="file-drop" id="drop3" for="t3-file-input"><span class="mi">cloud_upload</span> 點擊選擇或拖曳 PDF 到此處</label>
+      <input type="file" id="t3-file-input" accept=".pdf">
+      <div id="t3-status" class="status-msg"></div>
+    </div>
+
+    <div class="section-card" id="t3-sec-edit" style="display:none">
+      <h2><span class="mi">edit</span> 填入成績 <span class="badge">步驟 2</span></h2>
+      <div id="t3-editor" class="table-wrap" style="overflow-x:auto"></div>
+    </div>
+
+    <div class="section-card" id="t3-sec-action" style="display:none">
+      <h2><span class="mi">print</span> 預覽與列印 <span class="badge">步驟 3</span></h2>
+      <p style="font-size:12px; color:var(--text-light); margin-bottom:12px;">確認資料無誤後，按預覽查看排版，再列印。</p>
+      <button class="btn btn-primary" id="t3-btn-preview"><span class="mi" style="font-size:18px">visibility</span> 預覽成績單</button>
+      <button class="btn btn-success" id="t3-btn-print" onclick="window.print()"><span class="mi" style="font-size:18px">print</span> 列印</button>
+    </div>
+  </div>
+
+</div>
+
+<div id="print-area"></div>
 <script type="module">
 const { pdfjsLib } = globalThis;
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
 
 let students = [];
 const CARDS_PER_PAGE = 12;
+const SUBJECTS = ['國文','英語','數學','歷史','地理','公民','自然'];
 
+// ===== Progress indicator =====
+function setProgress(step) {
+  for (let i = 1; i <= 3; i++) {
+    const dot = document.getElementById('dot-'+i);
+    const lbl = document.getElementById('lbl-'+i);
+    dot.className = 'step-dot' + (i < step ? ' done' : i === step ? ' active' : '');
+    dot.textContent = i < step ? '✓' : i;
+    lbl.className = 'step-label' + (i === step ? ' active' : '');
+    if (i < 3) document.getElementById('line-'+i).className = 'step-line' + (i < step ? ' done' : '');
+  }
+}
+
+// ===== Tab switching =====
+window.switchTab = function(id) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', (i===0?'tab1':'tab3')===id));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id===id));
+  const pa = document.getElementById('print-area');
+  pa.innerHTML = ''; pa.classList.remove('preview');
+  setProgress(1);
+};
+
+// ===== Dropzone setup =====
+function setupDrop(dropId, inputId) {
+  const drop = document.getElementById(dropId), input = document.getElementById(inputId);
+  ['dragenter','dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.style.borderColor='var(--blue)'; drop.style.background='var(--blue-light)'; }));
+  ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.style.borderColor=''; drop.style.background=''; }));
+  drop.addEventListener('drop', ev => { const f=ev.dataTransfer.files[0]; if(f){const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;input.dispatchEvent(new Event('change'));} });
+  input.addEventListener('change', () => { if(input.files[0]){drop.textContent='\u2003'+input.files[0].name;drop.classList.add('has-file');}else{drop.textContent='<span class="mi">cloud_upload</span> 點擊選擇或拖曳 PDF 到此處';drop.classList.remove('has-file');} });
+}
+setupDrop('drop1','file-input'); setupDrop('drop2','prev-file-input'); setupDrop('drop3','t3-file-input');
+
+// ===== Status helper =====
+function setStatus(id, text, type) { const el=document.getElementById(id); el.textContent=text; el.className='status-msg '+(type||''); }
+
+// ===== Tab1: 定期一/二 =====
 document.getElementById('file-input').addEventListener('change', handleFile);
 document.getElementById('btn-preview').addEventListener('click', generatePreview);
+document.getElementById('prev-file-input').addEventListener('change', handlePrevFile);
 
 async function handleFile(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const status = document.getElementById('status');
-  status.textContent = '解析 PDF 中...';
-
+  const file=e.target.files[0]; if(!file) return;
+  setStatus('status','解析 PDF 中...','loading');
   try {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-    let allItems = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      allItems = allItems.concat(content.items);
-    }
-
+    const buf=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+    let allItems=[];
+    for(let i=1;i<=pdf.numPages;i++){const p=await pdf.getPage(i);const c=await p.getTextContent();allItems=allItems.concat(c.items);}
     parsePdfText(allItems);
-    status.textContent = `解析完成，共 ${students.length} 位學生`;
-  } catch (err) {
-    status.textContent = '解析失敗：' + err.message;
-    console.error(err);
-  }
+    setStatus('status',`解析完成，共 ${students.length} 位學生`,'success');
+  } catch(err){ setStatus('status','解析失敗：'+err.message,'error'); }
 }
 
 function parsePdfText(items) {
-  // Group text items by Y position (same row = similar Y)
-  const rows = [];
-  const Y_THRESHOLD = 3;
-
-  items.forEach(item => {
-    const y = Math.round(item.transform[5]);
-    const x = item.transform[4];
-    const text = item.str.trim();
-    if (!text) return;
-
-    let found = rows.find(r => Math.abs(r.y - y) < Y_THRESHOLD);
-    if (!found) {
-      found = { y, cells: [] };
-      rows.push(found);
-    }
-    found.cells.push({ x, text });
-  });
-
-  rows.sort((a, b) => b.y - a.y);
-  rows.forEach(r => r.cells.sort((a, b) => a.x - b.x));
-
-  // Define column boundaries based on X coordinates from debug output:
-  // seat: x~39, name: x~66-84, scores: x~133,172,212,252,292,331,386
-  // 總分: x~422-428, 總平均: x~474, 班名次: x~512-517, 年名次: x~544-550
-  const COL_BOUNDS = [
-    { name: 'seat',      min: 30,  max: 55  },
-    { name: 'name',      min: 55,  max: 110 },
-    { name: 'score0',    min: 110, max: 150 }, // 國文
-    { name: 'score1',    min: 150, max: 190 }, // 英語
-    { name: 'score2',    min: 190, max: 230 }, // 數學
-    { name: 'score3',    min: 230, max: 270 }, // 歷史
-    { name: 'score4',    min: 270, max: 310 }, // 地理
-    { name: 'score5',    min: 310, max: 355 }, // 公民
-    { name: 'score6',    min: 355, max: 405 }, // 自然
-    { name: 'total',     min: 405, max: 450 }, // 總分
-    { name: 'avg',       min: 450, max: 490 }, // 總平均
-    { name: 'classRank', min: 490, max: 525 }, // 班名次
-    { name: 'yearRank',  min: 525, max: 570 }, // 年名次
-  ];
-
-  function assignColumns(cells) {
-    const result = {};
-    COL_BOUNDS.forEach(col => result[col.name] = '');
-
-    cells.forEach(cell => {
-      for (const col of COL_BOUNDS) {
-        if (cell.x >= col.min && cell.x < col.max) {
-          result[col.name] += cell.text;
-          break;
-        }
-      }
-    });
-    return result;
-  }
-
-  students = [];
-  const seatPattern = /^\d{2}$/;
-
-  for (const row of rows) {
-    const cols = assignColumns(row.cells);
-    if (!seatPattern.test(cols.seat)) continue;
-
-    const scores = [];
-    for (let i = 0; i < 7; i++) {
-      const v = parseInt(cols['score' + i]);
-      scores.push(isNaN(v) ? 0 : v);
-    }
-
-    students.push({
-      seat: cols.seat,
-      name: cols.name,
-      scores,
-      avg: parseFloat(cols.avg) || 0,
-      classRank: parseInt(cols.classRank) || 0,
-      yearRank: parseInt(cols.yearRank) || 0,
-      prevRank: ''
-    });
-  }
-
-  if (students.length === 0) {
-    alert('沒有解析到學生資料');
-    return;
-  }
-
-  // Sort by seat number
-  students.sort((a, b) => parseInt(a.seat) - parseInt(b.seat));
-
+  const rows=[],Y_THRESHOLD=3;
+  items.forEach(item=>{const y=Math.round(item.transform[5]),x=item.transform[4],text=item.str.trim();if(!text)return;let f=rows.find(r=>Math.abs(r.y-y)<Y_THRESHOLD);if(!f){f={y,cells:[]};rows.push(f);}f.cells.push({x,text});});
+  rows.sort((a,b)=>b.y-a.y); rows.forEach(r=>r.cells.sort((a,b)=>a.x-b.x));
+  const COL=[{name:'seat',min:30,max:55},{name:'name',min:55,max:110},{name:'s0',min:110,max:150},{name:'s1',min:150,max:190},{name:'s2',min:190,max:230},{name:'s3',min:230,max:270},{name:'s4',min:270,max:310},{name:'s5',min:310,max:355},{name:'s6',min:355,max:405},{name:'total',min:405,max:450},{name:'avg',min:450,max:490},{name:'classRank',min:490,max:525},{name:'yearRank',min:525,max:570}];
+  function assign(cells){const r={};COL.forEach(c=>r[c.name]='');cells.forEach(cell=>{for(const c of COL){if(cell.x>=c.min&&cell.x<c.max){r[c.name]+=cell.text;break;}}});return r;}
+  students=[];
+  for(const row of rows){const c=assign(row.cells);if(!/^\d{2}$/.test(c.seat))continue;const scores=[];for(let i=0;i<7;i++){const v=parseInt(c['s'+i]);scores.push(isNaN(v)?0:v);}students.push({seat:c.seat,name:c.name,scores,avg:parseFloat(c.avg)||0,classRank:parseInt(c.classRank)||0,yearRank:parseInt(c.yearRank)||0,prevRank:''});}
+  if(!students.length){alert('沒有解析到學生資料');return;}
+  students.sort((a,b)=>parseInt(a.seat)-parseInt(b.seat));
   renderRankEditor();
-  document.getElementById('btn-preview').style.display = 'inline-block';
-  document.getElementById('btn-print').style.display = 'inline-block';
+  document.getElementById('sec-edit').style.display='';
+  document.getElementById('sec-action').style.display='';
+  setProgress(2);
 }
 
 function renderRankEditor() {
-  let html = '<h3>填入上次校排名次：</h3>';
-  html += '<table><tr><th>座號</th><th>姓名</th><th>本次校排</th><th>上次校排</th><th>進退步</th></tr>';
-  students.forEach((s, i) => {
-    html += `<tr>
-      <td>${s.seat}</td><td>${s.name}</td><td>${s.yearRank}</td>
-      <td><input type="number" id="prev-${i}" value="${s.prevRank}" min="1"
-           oninput="window.updateProgress(${i}, this.value)"></td>
-      <td id="prog-${i}">—</td>
-    </tr>`;
-  });
-  html += '</table>';
-  document.getElementById('rank-editor').innerHTML = html;
+  let h='<table><tr><th>座號</th><th>姓名</th><th>本次校排</th><th>上次校排</th><th>進退步</th></tr>';
+  students.forEach((s,i)=>{h+=`<tr><td>${s.seat}</td><td>${s.name}</td><td>${s.yearRank}</td><td><input type="number" id="prev-${i}" value="${s.prevRank}" min="1" oninput="window.updateProgress(${i},this.value)"></td><td id="prog-${i}">—</td></tr>`;});
+  h+='</table>';
+  document.getElementById('rank-editor').innerHTML=h;
 }
 
-window.updateProgress = function(idx, val) {
-  students[idx].prevRank = val ? parseInt(val) : '';
-  const el = document.getElementById(`prog-${idx}`);
-  if (val && !isNaN(val)) {
-    const diff = parseInt(val) - students[idx].yearRank;
-    if (diff > 0) el.innerHTML = `<span style="color:#d00">↑${diff}</span>`;
-    else if (diff < 0) el.innerHTML = `<span style="color:#080">↓${Math.abs(diff)}</span>`;
-    else el.textContent = '→0';
-  } else {
-    el.textContent = '—';
-  }
+window.updateProgress=function(idx,val){
+  students[idx].prevRank=val?parseInt(val):'';
+  const el=document.getElementById(`prog-${idx}`);
+  if(val&&!isNaN(val)){const d=parseInt(val)-students[idx].yearRank;if(d>0)el.innerHTML=`<span style="color:var(--error)">↑${d}</span>`;else if(d<0)el.innerHTML=`<span style="color:var(--success)">↓${Math.abs(d)}</span>`;else el.textContent='→0';}else el.textContent='—';
 };
 
+async function handlePrevFile(e) {
+  const file=e.target.files[0]; if(!file) return;
+  if(!students.length){setStatus('prev-status','請先上傳本次成績 PDF','error');return;}
+  setStatus('prev-status','解析上次成績 PDF 中...','loading');
+  try {
+    const buf=await file.arrayBuffer();const pdf=await pdfjsLib.getDocument({data:buf}).promise;let allItems=[];
+    for(let i=1;i<=pdf.numPages;i++){const p=await pdf.getPage(i);const c=await p.getTextContent();allItems=allItems.concat(c.items);}
+    const prev=parsePrevPdf(allItems);let matched=0;
+    students.forEach((s,i)=>{const p=prev.find(x=>x.name===s.name);if(p){s.prevRank=p.yearRank;matched++;}});
+    renderRankEditor();
+    students.forEach((s,i)=>{if(s.prevRank)window.updateProgress(i,s.prevRank);});
+    setStatus('prev-status',`解析完成，已匹配 ${matched}/${students.length} 位學生的上次校排`,'success');
+  } catch(err){setStatus('prev-status','解析失敗：'+err.message,'error');}
+}
+
+function parsePrevPdf(items) {
+  const rows=[],Y_THRESHOLD=3;
+  items.forEach(item=>{const y=Math.round(item.transform[5]),x=item.transform[4],text=item.str.trim();if(!text)return;let f=rows.find(r=>Math.abs(r.y-y)<Y_THRESHOLD);if(!f){f={y,cells:[]};rows.push(f);}f.cells.push({x,text});});
+  rows.sort((a,b)=>b.y-a.y);rows.forEach(r=>r.cells.sort((a,b)=>a.x-b.x));
+  const res=[];
+  for(const row of rows){let seat='',name='',yr='';for(const c of row.cells){if(c.x>=30&&c.x<55)seat+=c.text;else if(c.x>=55&&c.x<110)name+=c.text;else if(c.x>=525&&c.x<570)yr+=c.text;}if(/^\d{2}$/.test(seat))res.push({name,yearRank:parseInt(yr)||0});}
+  return res;
+}
+
 function generatePreview() {
-  const subjectNames = ['國文','英語','數學','歷史','地理','公民','自然'];
-  const printArea = document.getElementById('print-area');
-  printArea.classList.add('preview');
-
-  let html = '';
-  for (let p = 0; p < students.length; p += CARDS_PER_PAGE) {
-    html += '<div class="page">';
-    const pageStudents = students.slice(p, p + CARDS_PER_PAGE);
-    pageStudents.forEach(s => {
-      let progressText = '';
-      if (s.prevRank && !isNaN(s.prevRank)) {
-        const diff = s.prevRank - s.yearRank;
-        if (diff > 0) progressText = `<span class="progress-pos">+${diff}</span>`;
-        else if (diff < 0) progressText = `<span class="progress-neg">${diff}</span>`;
-        else progressText = '+0';
-      }
-
-      html += `<div class="card">
-        <table>
-          <tr>
-            <th>姓名</th>
-            ${subjectNames.map(n => `<th>${n}</th>`).join('')}
-            <th>平均</th><th>班名次</th><th>校名次</th><th>上次名次</th><th>家長簽章</th>
-          </tr>
-          <tr>
-            <td>${s.name}</td>
-            ${s.scores.map(v => `<td>${v}</td>`).join('')}
-            <td>${s.avg}</td><td>${s.classRank}</td><td>${s.yearRank}</td>
-            <td>${s.prevRank ? s.prevRank + '(' + progressText + ')' : ''}</td>
-            <td class="sign-cell"></td>
-          </tr>
-        </table>
-      </div>`;
+  setProgress(3);
+  const pa=document.getElementById('print-area'); pa.classList.add('preview');
+  let h='';
+  for(let p=0;p<students.length;p+=CARDS_PER_PAGE){
+    h+='<div class="page">';
+    students.slice(p,p+CARDS_PER_PAGE).forEach(s=>{
+      let prog='';if(s.prevRank&&!isNaN(s.prevRank)){const d=s.prevRank-s.yearRank;prog=d>0?`<span class="progress-pos">+${d}</span>`:d<0?`<span class="progress-neg">${d}</span>`:'+0';}
+      h+=`<div class="card"><table><tr><th>姓名</th>${SUBJECTS.map(n=>`<th>${n}</th>`).join('')}<th>平均</th><th>班名次</th><th>校名次</th><th>上次名次</th><th>家長簽章</th></tr><tr><td>${s.name}</td>${s.scores.map(v=>`<td>${v}</td>`).join('')}<td>${s.avg}</td><td>${s.classRank}</td><td>${s.yearRank}</td><td>${s.prevRank?s.prevRank+'('+prog+')':''}</td><td class="sign-cell"></td></tr></table></div>`;
     });
-    html += '</div>';
+    h+='</div>';
   }
+  pa.innerHTML=h; pa.scrollIntoView({behavior:'smooth'});
+}
 
-  printArea.innerHTML = html;
-  printArea.scrollIntoView({ behavior: 'smooth' });
+// ===== Tab3: 定期三 =====
+let t3Students=[];
+document.getElementById('t3-file-input').addEventListener('change',handleT3File);
+document.getElementById('t3-btn-preview').addEventListener('click',generateT3Preview);
+
+async function handleT3File(e) {
+  const file=e.target.files[0]; if(!file) return;
+  setStatus('t3-status','解析 PDF 中（僅讀取座號姓名）...','loading');
+  try {
+    const buf=await file.arrayBuffer();const pdf=await pdfjsLib.getDocument({data:buf}).promise;let allItems=[];
+    for(let i=1;i<=pdf.numPages;i++){const p=await pdf.getPage(i);const c=await p.getTextContent();allItems=allItems.concat(c.items);}
+    const rows=[],Y_THRESHOLD=3;
+    allItems.forEach(item=>{const y=Math.round(item.transform[5]),x=item.transform[4],text=item.str.trim();if(!text)return;let f=rows.find(r=>Math.abs(r.y-y)<Y_THRESHOLD);if(!f){f={y,cells:[]};rows.push(f);}f.cells.push({x,text});});
+    rows.sort((a,b)=>b.y-a.y);rows.forEach(r=>r.cells.sort((a,b)=>a.x-b.x));
+    t3Students=[];
+    for(const row of rows){let seat='',name='';for(const c of row.cells){if(c.x>=30&&c.x<55)seat+=c.text;else if(c.x>=55&&c.x<110)name+=c.text;}if(/^\d{2}$/.test(seat))t3Students.push({seat,name,scores:Array(7).fill(''),avg:'',classRank:'',yearRank:'',prevRank:''});}
+    t3Students.sort((a,b)=>parseInt(a.seat)-parseInt(b.seat));
+    setStatus('t3-status',`解析完成，共 ${t3Students.length} 位學生（僅座號姓名）`,'success');
+    renderT3Editor();
+    document.getElementById('t3-sec-edit').style.display='';
+    document.getElementById('t3-sec-action').style.display='';
+    setProgress(2);
+  } catch(err){setStatus('t3-status','解析失敗：'+err.message,'error');}
+}
+
+function renderT3Editor() {
+  const hdr='<tr><th>座號</th><th>姓名</th>'+SUBJECTS.map(s=>'<th>'+s+'</th>').join('')+'<th>平均</th><th>班名次</th><th>校名次</th><th>上次名次</th></tr>';
+  let body='';
+  t3Students.forEach((s,i)=>{
+    body+='<tr><td>'+s.seat+'</td><td>'+s.name+'</td>';
+    for(let j=0;j<7;j++)body+='<td><input type="number" data-i="'+i+'" data-f="s'+j+'" value="'+s.scores[j]+'" oninput="window.t3Update(this)"></td>';
+    body+='<td><input type="number" data-i="'+i+'" data-f="avg" value="'+s.avg+'" oninput="window.t3Update(this)"></td>';
+    body+='<td><input type="number" data-i="'+i+'" data-f="cr" value="'+s.classRank+'" oninput="window.t3Update(this)"></td>';
+    body+='<td><input type="number" data-i="'+i+'" data-f="yr" value="'+s.yearRank+'" oninput="window.t3Update(this)"></td>';
+    body+='<td><input type="number" data-i="'+i+'" data-f="pr" value="'+s.prevRank+'" oninput="window.t3Update(this)"></td></tr>';
+  });
+  document.getElementById('t3-editor').innerHTML='<table>'+hdr+body+'</table>';
+}
+
+window.t3Update=function(el){
+  const i=parseInt(el.dataset.i),f=el.dataset.f,v=el.value;
+  if(f.startsWith('s'))t3Students[i].scores[parseInt(f[1])]=v;
+  else if(f==='avg')t3Students[i].avg=v;
+  else if(f==='cr')t3Students[i].classRank=v;
+  else if(f==='yr')t3Students[i].yearRank=v;
+  else if(f==='pr')t3Students[i].prevRank=v;
+};
+
+function generateT3Preview() {
+  setProgress(3);
+  const pa=document.getElementById('print-area'); pa.classList.add('preview');
+  let h='';
+  for(let p=0;p<t3Students.length;p+=CARDS_PER_PAGE){
+    h+='<div class="page">';
+    t3Students.slice(p,p+CARDS_PER_PAGE).forEach(s=>{
+      let prog='';if(s.prevRank&&s.yearRank){const d=parseInt(s.prevRank)-parseInt(s.yearRank);prog=d>0?'<span class="progress-pos">+'+d+'</span>':d<0?'<span class="progress-neg">'+d+'</span>':'+0';}
+      h+='<div class="card"><table><tr><th>姓名</th>'+SUBJECTS.map(n=>'<th>'+n+'</th>').join('')+'<th>平均</th><th>班名次</th><th>校名次</th><th>上次名次</th><th>家長簽章</th></tr><tr><td>'+s.name+'</td>'+s.scores.map(v=>'<td>'+(v||'')+'</td>').join('')+'<td>'+(s.avg||'')+'</td><td>'+(s.classRank||'')+'</td><td>'+(s.yearRank||'')+'</td><td>'+(s.prevRank?s.prevRank+'('+prog+')':'')+'</td><td class="sign-cell"></td></tr></table></div>';
+    });
+    h+='</div>';
+  }
+  pa.innerHTML=h; pa.scrollIntoView({behavior:'smooth'});
 }
 </script>
 </body>
