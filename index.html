@@ -44,7 +44,9 @@ body { font-family: "Microsoft JhengHei", -apple-system, sans-serif; background:
 /* Main container */
 .controls {
   max-width: 780px; margin: 20px auto; padding: 0 16px 32px;
+  transition: max-width .3s;
 }
+.controls.wide { max-width: 1100px; }
 
 /* Section cards */
 .section-card {
@@ -104,7 +106,7 @@ body { font-family: "Microsoft JhengHei", -apple-system, sans-serif; background:
 /* Tables */
 .table-wrap { margin-top: 12px; }
 .table-wrap table { border-collapse: collapse; width: 100%; }
-.table-wrap th, .table-wrap td { border: 1px solid var(--border); padding: 6px 8px; text-align: center; font-size: 12px; }
+.table-wrap th, .table-wrap td { border: 1px solid var(--border); padding: 6px 8px; text-align: center; font-size: 12px; white-space: nowrap; }
 .table-wrap th { background: var(--blue-light); color: var(--text); font-weight: 600; position: sticky; top: 0; z-index: 1; }
 .table-wrap tr:hover td { background: var(--pink-light); }
 .table-wrap input[type="number"] {
@@ -286,6 +288,7 @@ function setProgress(step) {
 window.switchTab = function(id) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', (i===0?'tab1':'tab3')===id));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id===id));
+  document.querySelector('.controls').classList.toggle('wide', id==='tab3');
   const pa = document.getElementById('print-area');
   pa.innerHTML = ''; pa.classList.remove('preview');
   setProgress(1);
